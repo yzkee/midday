@@ -1,4 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { cors } from "hono/cors";
 import {
   authMiddleware,
   loggingMiddleware,
@@ -19,6 +20,27 @@ const app = new OpenAPIHono({
     }
   },
 });
+
+app.use(
+  "*",
+  cors({
+    origin: [
+      "http://localhost:3001", // Development
+      "https://app.midday.ai", // Production
+      "https://beta.midday.ai", // Staging
+    ],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowHeaders: [
+      "Authorization",
+      "Content-Type",
+      "Accept",
+      "Origin",
+      "X-Requested-With",
+    ],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 86400,
+  }),
+);
 
 app.use(authMiddleware);
 app.use(securityMiddleware);
