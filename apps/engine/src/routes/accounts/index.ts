@@ -46,10 +46,6 @@ const app = new OpenAPIHono<{ Bindings: Bindings }>()
 
       const { provider, accessToken, institutionId, id } = c.req.valid("query");
 
-      console.log(
-        `[Accounts] Request: provider=${provider}, id=${id ? "present" : "missing"}`,
-      );
-
       const api = new Provider({
         provider,
         kv: c.env.KV,
@@ -58,26 +54,11 @@ const app = new OpenAPIHono<{ Bindings: Bindings }>()
       });
 
       try {
-        const startTime = Date.now();
-
-        // Add overall timeout for the entire request (with unbound workers: 30s limit)
-        const TOTAL_TIMEOUT = 28000; // 28 seconds (leave 2s buffer)
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Request timeout")), TOTAL_TIMEOUT);
-        });
-
-        const accountsPromise = api.getAccounts({
+        const data = await api.getAccounts({
           id,
           accessToken,
           institutionId,
         });
-
-        const data = await Promise.race([accountsPromise, timeoutPromise]);
-
-        const duration = Date.now() - startTime;
-        console.log(
-          `[Accounts] Success: ${data.length} accounts retrieved in ${duration}ms`,
-        );
 
         return c.json(
           {
@@ -86,10 +67,6 @@ const app = new OpenAPIHono<{ Bindings: Bindings }>()
           200,
         );
       } catch (error) {
-        console.error(
-          `[Accounts] Error for provider=${provider}, id=${id}:`,
-          error,
-        );
         const errorResponse = createErrorResponse(error);
 
         return c.json(errorResponse, 400);

@@ -218,113 +218,39 @@ export class EnableBankingApi {
   async getAccounts({
     id,
   }: GetAccountsRequest): Promise<GetAccountDetailsResponse[]> {
-    try {
-      console.log(`[EnableBanking] Getting accounts for session: ${id}`);
-      const startTime = Date.now();
+    const session = await this.getSession(id);
 
-      const session = await this.getSession(id);
-      console.log(
-        `[EnableBanking] Session retrieved, found ${session.accounts.length} accounts`,
-      );
+    // For production: process in smaller batches to avoid overwhelming the system
+    const BATCH_SIZE = 4; // Process 4 accounts at a time
+    const accountBatches = [];
 
-      // Optimize: Process accounts with timeout and error resilience
-      const ACCOUNT_TIMEOUT = 8000; // 8 seconds per account (reduced for reliability)
-      const MAX_CONCURRENT = 2; // Limit concurrent requests (reduced to prevent overload)
-
-      const processAccountBatch = async (
-        accountIds: string[],
-      ): Promise<PromiseSettledResult<GetAccountDetailsResponse>[]> => {
-        return Promise.allSettled(
-          accountIds.map(
-            async (accountId, index): Promise<GetAccountDetailsResponse> => {
-              const timeoutPromise = new Promise<never>((_, reject) => {
-                setTimeout(
-                  () =>
-                    reject(
-                      new Error(`Timeout processing account ${accountId}`),
-                    ),
-                  ACCOUNT_TIMEOUT,
-                );
-              });
-
-              const accountPromise =
-                (async (): Promise<GetAccountDetailsResponse> => {
-                  console.log(
-                    `[EnableBanking] Processing account ${index + 1}/${accountIds.length}: ${accountId}`,
-                  );
-
-                  const [details, balance] = await Promise.all([
-                    this.getAccountDetails(accountId),
-                    this.getAccountBalance(accountId),
-                  ]);
-
-                  return {
-                    ...details,
-                    institution: session.aspsp,
-                    valid_until: session.access.valid_until,
-                    balance,
-                  };
-                })();
-
-              return Promise.race([accountPromise, timeoutPromise]);
-            },
-          ),
-        );
-      };
-
-      // Process accounts in batches to avoid overwhelming the API
-      const accountBatches: string[][] = [];
-      for (let i = 0; i < session.accounts.length; i += MAX_CONCURRENT) {
-        accountBatches.push(session.accounts.slice(i, i + MAX_CONCURRENT));
-      }
-
-      const allResults: PromiseSettledResult<GetAccountDetailsResponse>[] = [];
-      for (const batch of accountBatches) {
-        const batchResults = await processAccountBatch(batch);
-        allResults.push(...batchResults);
-      }
-
-      // Separate successful and failed accounts
-      const successfulAccounts: GetAccountDetailsResponse[] = [];
-      const failedAccounts: string[] = [];
-
-      allResults.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          successfulAccounts.push(result.value);
-        } else {
-          const accountId = session.accounts[index];
-          failedAccounts.push(accountId);
-          console.error(
-            `[EnableBanking] Failed to process account ${accountId}:`,
-            result.reason,
-          );
-        }
-      });
-
-      const duration = Date.now() - startTime;
-      console.log(
-        `[EnableBanking] Processed ${successfulAccounts.length}/${session.accounts.length} accounts successfully in ${duration}ms`,
-      );
-
-      if (failedAccounts.length > 0) {
-        console.warn(
-          `[EnableBanking] ${failedAccounts.length} accounts failed: ${failedAccounts.join(", ")}`,
-        );
-      }
-
-      // Return successful accounts even if some failed
-      if (successfulAccounts.length === 0) {
-        throw new Error(`All accounts failed to process for session ${id}`);
-      }
-
-      return successfulAccounts;
-    } catch (error) {
-      console.error(
-        `[EnableBanking] getAccounts error for session ${id}:`,
-        error,
-      );
-      throw error;
+    for (let i = 0; i < session.accounts.length; i += BATCH_SIZE) {
+      accountBatches.push(session.accounts.slice(i, i + BATCH_SIZE));
     }
+
+    const allAccountDetails = [];
+
+    for (const batch of accountBatches) {
+      const batchDetails = await Promise.all(
+        batch.map(async (accountId) => {
+          const [details, balance] = await Promise.all([
+            this.getAccountDetails(accountId),
+            this.getAccountBalance(accountId),
+          ]);
+
+          return {
+            ...details,
+            institution: session.aspsp,
+            valid_until: session.access.valid_until,
+            balance,
+          };
+        }),
+      );
+
+      allAccountDetails.push(...batchDetails);
+    }
+
+    return allAccountDetails;
   }
 
   async getAccountBalance(
