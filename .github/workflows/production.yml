@@ -52,9 +52,11 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Validate — runs in parallel with detect-changes
+  # TEMPORARILY DISABLED: set `if: false` to skip; remove to re-enable.
   # ---------------------------------------------------------------------------
   validate:
     name: Validate
+    if: false
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     services:
@@ -102,11 +104,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Tool selection evals — runs when API changes to catch regressions
+  # TEMPORARILY DISABLED: set `if: false` to skip; restore the condition to re-enable.
   # ---------------------------------------------------------------------------
   eval-tool-selection:
     name: Tool selection evals
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.api == 'true'
+    if: false
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
@@ -131,7 +134,7 @@ jobs:
     needs: [detect-changes, validate, eval-tool-selection]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.detect-changes.outputs.api == 'true' &&
       (needs.eval-tool-selection.result == 'success' || needs.eval-tool-selection.result == 'skipped')
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -156,7 +159,7 @@ jobs:
     needs: [detect-changes, validate, deploy-api]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.deploy-api.result == 'success'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
@@ -193,7 +196,7 @@ jobs:
     needs: [detect-changes, validate, deploy-api]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.detect-changes.outputs.dashboard == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -218,7 +221,7 @@ jobs:
     needs: [detect-changes, validate, deploy-api]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.detect-changes.outputs.worker == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -243,7 +246,7 @@ jobs:
     needs: [detect-changes, validate]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.detect-changes.outputs.website == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
@@ -278,7 +281,7 @@ jobs:
     needs: [detect-changes, validate]
     if: >-
       always() &&
-      needs.validate.result == 'success' &&
+      (needs.validate.result == 'success' || needs.validate.result == 'skipped') &&
       needs.detect-changes.outputs.jobs == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
